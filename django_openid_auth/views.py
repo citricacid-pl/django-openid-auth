@@ -51,6 +51,20 @@ from django_openid_auth import teams
 from django_openid_auth.forms import OpenIDLoginForm
 from django_openid_auth.store import DjangoOpenIDStore
 
+REQUIRED_AX_ATTRIBUTES = getattr(settings, "OPENID_REQUIRED_AX_ATTRIBUTES", [
+    ('http://axschema.org/contact/email', 'email'),
+    ('http://axschema.org/namePerson', 'fullname'),
+    ('http://axschema.org/namePerson/first', 'firstname'),
+    ('http://axschema.org/namePerson/last', 'lastname'),
+    ('http://axschema.org/namePerson/friendly', 'nickname'),
+    # The myOpenID provider advertises AX support, but uses
+    # attribute names from an obsolete draft of the
+    # specification.  We request them for compatibility.
+    ('http://schema.openid.net/contact/email', 'old_email'),
+    ('http://schema.openid.net/namePerson', 'old_fullname'),
+    ('http://schema.openid.net/namePerson/friendly', 'old_nickname')
+])
+
 
 next_url_re = re.compile('^/[-\w/]+$')
 
@@ -176,18 +190,7 @@ def login_begin(request, template_name='openid/login.html',
         # optional attributes.  We request both the full name and
         # first/last components since some providers offer one but not
         # the other.
-        for (attr, alias) in [
-            ('http://axschema.org/contact/email', 'email'),
-            ('http://axschema.org/namePerson', 'fullname'),
-            ('http://axschema.org/namePerson/first', 'firstname'),
-            ('http://axschema.org/namePerson/last', 'lastname'),
-            ('http://axschema.org/namePerson/friendly', 'nickname'),
-            # The myOpenID provider advertises AX support, but uses
-            # attribute names from an obsolete draft of the
-            # specification.  We request them for compatibility.
-            ('http://schema.openid.net/contact/email', 'old_email'),
-            ('http://schema.openid.net/namePerson', 'old_fullname'),
-            ('http://schema.openid.net/namePerson/friendly', 'old_nickname')]:
+        for (attr, alias) in REQUIRED_AX_ATTRIBUTES:
             fetch_request.add(ax.AttrInfo(attr, alias=alias, required=True))
         openid_request.addExtension(fetch_request)
     else:
