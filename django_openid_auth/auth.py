@@ -30,12 +30,11 @@
 
 __metaclass__ = type
 
-from django.conf import settings
 from django.contrib.auth.models import User, Group
 from openid.consumer.consumer import SUCCESS
 from openid.extensions import ax, sreg
 
-from django_openid_auth import teams
+from django_openid_auth import conf, teams
 from django_openid_auth.models import UserOpenID
 
 
@@ -71,7 +70,7 @@ class OpenIDBackend:
             user_openid = UserOpenID.objects.get(
                 claimed_id__exact=openid_response.identity_url)
         except UserOpenID.DoesNotExist:
-            if getattr(settings, 'OPENID_CREATE_USERS', False):
+            if conf.CREATE_USERS:
                 user = self.create_user_from_openid(openid_response)
         else:
             user = user_openid.user
@@ -79,8 +78,8 @@ class OpenIDBackend:
         if user is None:
             return None
 
-        if getattr(settings, 'OPENID_UPDATE_DETAILS_FROM_SREG', False):
-            details = self._extract_user_details(openid_response)
+        details = self._extract_user_details(openid_response)
+        if details:
             self.update_user_details(user, details)
 
         teams_response = teams.TeamsResponse.fromSuccessResponse(
@@ -91,38 +90,42 @@ class OpenIDBackend:
         return user
 
     def _extract_user_details(self, openid_response):
+        if (not conf.UPDATE_DETAILS_FROM_AX and
+                not conf.UPDATE_DETAILS_FROM_SREG):
+            return {}
         email = fullname = first_name = last_name = nickname = None
-        sreg_response = sreg.SRegResponse.fromSuccessResponse(openid_response)
-        if sreg_response:
-            email = sreg_response.get('email')
-            fullname = sreg_response.get('fullname')
-            nickname = sreg_response.get('nickname')
+        if conf.UPDATE_DETAILS_FROM_SREG:
+            sreg_response = sreg.SRegResponse.fromSuccessResponse(openid_response)
+            if sreg_response:
+                email = sreg_response.get('email')
+                fullname = sreg_response.get('fullname')
+                nickname = sreg_response.get('nickname')
+        if conf.UPDATE_DETAILS_FROM_AX:
+            # If any attributes are provided via Attribute Exchange, use
+            # them in preference.
+            fetch_response = ax.FetchResponse.fromSuccessResponse(openid_response)
+            if fetch_response:
+                # The myOpenID provider advertises AX support, but uses
+                # attribute names from an obsolete draft of the
+                # specification.  We check for them first so the common
+                # names take precedence.
+                email = fetch_response.getSingle(
+                    'http://schema.openid.net/contact/email', email)
+                fullname = fetch_response.getSingle(
+                    'http://schema.openid.net/namePerson', fullname)
+                nickname = fetch_response.getSingle(
+                    'http://schema.openid.net/namePerson/friendly', nickname)
 
-        # If any attributes are provided via Attribute Exchange, use
-        # them in preference.
-        fetch_response = ax.FetchResponse.fromSuccessResponse(openid_response)
-        if fetch_response:
-            # The myOpenID provider advertises AX support, but uses
-            # attribute names from an obsolete draft of the
-            # specification.  We check for them first so the common
-            # names take precedence.
-            email = fetch_response.getSingle(
-                'http://schema.openid.net/contact/email', email)
-            fullname = fetch_response.getSingle(
-                'http://schema.openid.net/namePerson', fullname)
-            nickname = fetch_response.getSingle(
-                'http://schema.openid.net/namePerson/friendly', nickname)
-
-            email = fetch_response.getSingle(
-                'http://axschema.org/contact/email', email)
-            fullname = fetch_response.getSingle(
-                'http://axschema.org/namePerson', fullname)
-            first_name = fetch_response.getSingle(
-                'http://axschema.org/namePerson/first', first_name)
-            last_name = fetch_response.getSingle(
-                'http://axschema.org/namePerson/last', last_name)
-            nickname = fetch_response.getSingle(
-                'http://axschema.org/namePerson/friendly', nickname)
+                email = fetch_response.getSingle(
+                    'http://axschema.org/contact/email', email)
+                fullname = fetch_response.getSingle(
+                    'http://axschema.org/namePerson', fullname)
+                first_name = fetch_response.getSingle(
+                    'http://axschema.org/namePerson/first', first_name)
+                last_name = fetch_response.getSingle(
+                    'http://axschema.org/namePerson/last', last_name)
+                nickname = fetch_response.getSingle(
+                    'http://axschema.org/namePerson/friendly', nickname)
 
         if fullname and not (first_name or last_name):
             # Django wants to store first and last names separately,
@@ -196,13 +199,11 @@ class OpenIDBackend:
             user.save()
 
     def update_groups_from_teams(self, user, teams_response):
-        teams_mapping_auto = getattr(settings, 'OPENID_LAUNCHPAD_TEAMS_MAPPING_AUTO', False)
-        teams_mapping_auto_blacklist = getattr(settings, 'OPENID_LAUNCHPAD_TEAMS_MAPPING_AUTO_BLACKLIST', [])
-        teams_mapping = getattr(settings, 'OPENID_LAUNCHPAD_TEAMS_MAPPING', {})
-        if teams_mapping_auto:
+        teams_mapping = conf.LAUNCHPAD_TEAMS_MAPPING
+        if conf.LAUNCHPAD_TEAMS_MAPPING_AUTO:
             #ignore teams_mapping. use all django-groups
             teams_mapping = dict()
-            all_groups = Group.objects.exclude(name__in=teams_mapping_auto_blacklist)
+            all_groups = Group.objects.exclude(name__in=conf.LAUNCHPAD_TEAMS_MAPPING_AUTO_BLACKLIST)
             for group in all_groups:
                 teams_mapping[group.name] = group.name
 

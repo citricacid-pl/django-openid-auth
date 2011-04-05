@@ -32,9 +32,10 @@ from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserChangeForm
 from django.contrib.auth.models import Group
 from django.utils.translation import ugettext as _
-from django.conf import settings
 
 from openid.yadis import xri
+
+from django_openid_auth import conf
 
 
 def teams_new_unicode(self):
@@ -43,7 +44,7 @@ def teams_new_unicode(self):
     Calls original method to chain results
     """
     name = self.unicode_before_teams()
-    teams_mapping = getattr(settings, 'OPENID_LAUNCHPAD_TEAMS_MAPPING', {})
+    teams_mapping = conf.LAUNCHPAD_TEAMS_MAPPING
     group_teams = [t for t in teams_mapping if teams_mapping[t] == self.name]
     if len(group_teams) > 0:
         return "%s -> %s" % (name, ", ".join(group_teams))
@@ -59,7 +60,7 @@ class UserChangeFormWithTeamRestriction(UserChangeForm):
     """
     def clean_groups(self):
         data = self.cleaned_data['groups']
-        teams_mapping = getattr(settings, 'OPENID_LAUNCHPAD_TEAMS_MAPPING', {})
+        teams_mapping = conf.LAUNCHPAD_TEAMS_MAPPING
         known_teams = teams_mapping.values()
         user_groups = self.instance.groups.all()
         for group in data:
@@ -78,10 +79,8 @@ class OpenIDLoginForm(forms.Form):
     def clean_openid_identifier(self):
         if 'openid_identifier' in self.cleaned_data:
             openid_identifier = self.cleaned_data['openid_identifier']
-            if xri.identifierScheme(openid_identifier) == 'XRI' and getattr(
-                settings, 'OPENID_DISALLOW_INAMES', False
-                ):
+            if (xri.identifierScheme(openid_identifier) == 'XRI'
+                    and conf.DISALLOW_INAMES):
                 raise forms.ValidationError(_('i-names are not supported'))
             return self.cleaned_data['openid_identifier']
-
 

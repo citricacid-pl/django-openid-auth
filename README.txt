@@ -45,6 +45,10 @@ single signon systems.
 
         OPENID_UPDATE_DETAILS_FROM_SREG = True
 
+    and/or:
+
+        OPENID_UPDATE_DETAILS_FROM_AX = True
+
  6. Hook up the login URLs to your application's urlconf with
     something like:
 

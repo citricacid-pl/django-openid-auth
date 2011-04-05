@@ -47,23 +47,11 @@ from openid.consumer.consumer import (
 from openid.consumer.discover import DiscoveryFailure
 from openid.extensions import sreg, ax
 
-from django_openid_auth import teams
+from django_openid_auth import conf, teams
 from django_openid_auth.forms import OpenIDLoginForm
 from django_openid_auth.store import DjangoOpenIDStore
 
-REQUIRED_AX_ATTRIBUTES = getattr(settings, "OPENID_REQUIRED_AX_ATTRIBUTES", [
-    ('http://axschema.org/contact/email', 'email'),
-    ('http://axschema.org/namePerson', 'fullname'),
-    ('http://axschema.org/namePerson/first', 'firstname'),
-    ('http://axschema.org/namePerson/last', 'lastname'),
-    ('http://axschema.org/namePerson/friendly', 'nickname'),
-    # The myOpenID provider advertises AX support, but uses
-    # attribute names from an obsolete draft of the
-    # specification.  We request them for compatibility.
-    ('http://schema.openid.net/contact/email', 'old_email'),
-    ('http://schema.openid.net/namePerson', 'old_fullname'),
-    ('http://schema.openid.net/namePerson/friendly', 'old_nickname')
-])
+
 
 
 next_url_re = re.compile('^/[-\w/]+$')
@@ -84,8 +72,7 @@ def sanitise_redirect_url(redirect_to):
         is_valid = False
     elif '//' in redirect_to:
         # Allow the redirect URL to be external if it's a permitted domain
-        allowed_domains = getattr(settings, 
-            "ALLOWED_EXTERNAL_OPENID_REDIRECT_DOMAINS", [])
+        allowed_domains = conf.ALLOWED_EXTERNAL_OPENID_REDIRECT_DOMAINS
         s, netloc, p, q, f = urlsplit(redirect_to)
         # allow it if netloc is blank or if the domain is allowed
         if netloc:
@@ -113,7 +100,7 @@ def make_consumer(request):
 def render_openid_request(request, openid_request, return_to, trust_root=None):
     """Render an OpenID authentication request."""
     if trust_root is None:
-        trust_root = getattr(settings, 'OPENID_TRUST_ROOT',
+        trust_root = getattr(conf, 'TRUST_ROOT',
                              request.build_absolute_uri('/'))
 
     if openid_request.shouldSendRedirect():
@@ -157,7 +144,7 @@ def login_begin(request, template_name='openid/login.html',
 
     # Get the OpenID URL to try.  First see if we've been configured
     # to use a fixed server URL.
-    openid_url = getattr(settings, 'OPENID_SSO_SERVER_URL', None)
+    openid_url = conf.SSO_SERVER_URL
 
     if openid_url is None:
         if request.POST:
@@ -174,7 +161,6 @@ def login_begin(request, template_name='openid/login.html',
                     redirect_field_name: redirect_to
                     }, context_instance=RequestContext(request))
 
-    error = None
     consumer = make_consumer(request)
     try:
         openid_request = consumer.begin(openid_url)
@@ -190,7 +176,7 @@ def login_begin(request, template_name='openid/login.html',
         # optional attributes.  We request both the full name and
         # first/last components since some providers offer one but not
         # the other.
-        for (attr, alias) in REQUIRED_AX_ATTRIBUTES:
+        for (attr, alias) in conf.REQUIRED_AX_ATTRIBUTES:
             fetch_request.add(ax.AttrInfo(attr, alias=alias, required=True))
         openid_request.addExtension(fetch_request)
     else:
@@ -198,13 +184,11 @@ def login_begin(request, template_name='openid/login.html',
             sreg.SRegRequest(optional=['email', 'fullname', 'nickname']))
 
     # Request team info
-    teams_mapping_auto = getattr(settings, 'OPENID_LAUNCHPAD_TEAMS_MAPPING_AUTO', False)
-    teams_mapping_auto_blacklist = getattr(settings, 'OPENID_LAUNCHPAD_TEAMS_MAPPING_AUTO_BLACKLIST', [])
-    launchpad_teams = getattr(settings, 'OPENID_LAUNCHPAD_TEAMS_MAPPING', {})
-    if teams_mapping_auto:
+    launchpad_teams = conf.LAUNCHPAD_TEAMS_MAPPING
+    if conf.LAUNCHPAD_TEAMS_MAPPING_AUTO:
         #ignore launchpad teams. use all django-groups
         launchpad_teams = dict()
-        all_groups = Group.objects.exclude(name__in=teams_mapping_auto_blacklist)
+        all_groups = Group.objects.exclude(name__in=conf.LAUNCHPAD_TEAMS_MAPPING_AUTO_BLACKLIST)
         for group in all_groups:
             launchpad_teams[group.name] = group.name
 

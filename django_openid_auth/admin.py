@@ -29,6 +29,8 @@
 
 from django.conf import settings
 from django.contrib import admin
+
+from django_openid_auth import conf
 from django_openid_auth.models import Nonce, Association, UserOpenID
 from django_openid_auth.store import DjangoOpenIDStore
 
@@ -69,7 +71,7 @@ admin.site.register(UserOpenID, UserOpenIDAdmin)
 
 
 # Support for allowing openid authentication for /admin (django.contrib.admin)
-if getattr(settings, 'OPENID_USE_AS_ADMIN_LOGIN', False):
+if conf.USE_AS_ADMIN_LOGIN:
     from django.http import HttpResponseRedirect
     from django_openid_auth import views
 
