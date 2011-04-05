@@ -100,8 +100,9 @@ def make_consumer(request):
 def render_openid_request(request, openid_request, return_to, trust_root=None):
     """Render an OpenID authentication request."""
     if trust_root is None:
-        trust_root = getattr(conf, 'TRUST_ROOT',
-                             request.build_absolute_uri('/'))
+        trust_root = getattr(conf, 'TRUST_ROOT')
+        if trust_root is None:
+            trust_root = request.build_absolute_uri('/')
 
     if openid_request.shouldSendRedirect():
         redirect_url = openid_request.redirectURL(
